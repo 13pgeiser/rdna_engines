@@ -11,7 +11,7 @@ MODEL_URL="https://huggingface.co/ornith-ai/Ornith-1.5-35B-A3B-GGUF/resolve/main
 
 # 1. Clone llama.cpp if not present
 if [ ! -d "$LLAMA_CPP_DIR" ]; then
-	git clone https://github.com/ggml-org/llama.cpp.git
+  git clone https://github.com/ggml-org/llama.cpp.git
 fi
 
 # 2. Build the Vulkan server image from the local clone
@@ -19,17 +19,17 @@ docker build -f "$DOCKERFILE" --target server -t "$IMAGE_NAME" "$LLAMA_CPP_DIR"
 
 # 3. Download the model if it is not present yet
 if [ ! -f "$MODEL_PATH" ]; then
-	mkdir -p "$(dirname "$MODEL_PATH")"
-	echo "Downloading $MODEL_NAME ..."
-	wget -O "$MODEL_PATH" "$MODEL_URL"
+  mkdir -p "$(dirname "$MODEL_PATH")"
+  echo "Downloading $MODEL_NAME ..."
+  wget -O "$MODEL_PATH" "$MODEL_URL"
 fi
 
 # 4. Run the Vulkan server
 docker run --rm --name llama-vulkan-server \
-	--device /dev/dri:/dev/dri \
-	-v /models:/models \
-	-p 9931:9931 \
-	"$IMAGE_NAME" \
-	--model "$MODEL_PATH" \
-	--host 0.0.0.0 \
-	--port 9931
+  --device /dev/dri:/dev/dri \
+  -v /models:/models \
+  -p 9931:9931 \
+  "$IMAGE_NAME" \
+  --model "$MODEL_PATH" \
+  --host 0.0.0.0 \
+  --port 9931
