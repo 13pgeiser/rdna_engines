@@ -32,4 +32,5 @@ docker run --rm --name llama-vulkan-server \
   "$IMAGE_NAME" \
   --model "$MODEL_PATH" \
   --host 0.0.0.0 \
-  --port 9931
+  --port 9931 \
+  --reasoning-effort medium
