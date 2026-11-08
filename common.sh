@@ -57,3 +57,59 @@ select_model() {
   MODEL_TAG="${CHOICES[$((choice - 1))]#*|}"
   echo "Selected model: $MODEL_TAG"
 }
+
+# --- llama.cpp shared helpers ------------------------------------------------
+# Used by run_llama_vulkan.sh and run_llama_rocm.sh. Each launcher sets the
+# globals these read before calling them (see the per-backend section of the
+# launcher scripts):
+#   LLAMA_CPP_DIR, DOCKERFILE, IMAGE_NAME -> build_llama_server
+#   MODEL_DIR, MODEL_URLS                 -> download_model <name>
+#   SERVER_NAME, EXTRA_RUN_ARGS, PORT, MODEL_PATH -> run_llama_server
+
+# clone_llama_cpp <dir>
+# Clone llama.cpp if the directory is not present.
+clone_llama_cpp() {
+  local dir="$1"
+  if [ ! -d "$dir" ]; then
+    echo "Cloning $dir ..."
+    git clone https://github.com/ggml-org/llama.cpp.git "$dir"
+  fi
+}
+
+# build_llama_server
+# Build the backend server image (target server) from the local llama.cpp clone.
+build_llama_server() {
+  docker build -f "$DOCKERFILE" --target server -t "$IMAGE_NAME" "$LLAMA_CPP_DIR"
+}
+
+# download_model <name>
+# Download a GGUF model via MODEL_URLS if it is not already present.
+download_model() {
+  local name="$1"
+  local path="$MODEL_DIR/$name"
+  if [ ! -f "$path" ]; then
+    mkdir -p "$(dirname "$path")"
+    if [ -z "${MODEL_URLS[$name]:-}" ]; then
+      echo "ERROR: no download URL for '$name' in MODEL_URLS." >&2
+      exit 1
+    fi
+    echo "Downloading $name ..."
+    wget -O "$path" "${MODEL_URLS[$name]}"
+  fi
+}
+
+# run_llama_server
+# Run the backend server with the GPU passed through. EXTRA_RUN_ARGS holds the
+# per-backend device flags (e.g. --device /dev/dri).
+run_llama_server() {
+  docker rm -f "$SERVER_NAME" 2>/dev/null || true
+  docker run --rm --name "$SERVER_NAME" \
+    "${EXTRA_RUN_ARGS[@]}" \
+    -v /models:/models \
+    -p "$PORT:$PORT" \
+    "$IMAGE_NAME" \
+    --model "$MODEL_PATH" \
+    --host 0.0.0.0 \
+    --port "$PORT" \
+    --reasoning-effort medium
+}

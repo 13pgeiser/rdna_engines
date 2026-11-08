@@ -3,14 +3,6 @@ set -euo pipefail
 
 # llama.cpp Vulkan server launcher
 LLAMA_CPP_DIR="llama.cpp"
-# Clone llama.cpp if not present
-if [ ! -d "$LLAMA_CPP_DIR" ]; then
-  git clone https://github.com/ggml-org/llama.cpp.git
-fi
-
-DOCKERFILE="$LLAMA_CPP_DIR/.devops/vulkan.Dockerfile"
-IMAGE_NAME="local/llama.cpp:server-vulkan"
-MODEL_DIR="/models/gguf"
 
 # --- Model selection menu ----------------------------------------------------
 # Same mechanism as run_openflowlm.sh (see common.sh); each engine keeps its own
@@ -40,32 +32,27 @@ declare -A MODEL_URLS=(
 # Shared interactive menu mechanism (see common.sh); resolves MODEL_TAG from CHOICES.
 . "$(dirname "$0")/common.sh"
 
+# Per-backend build/run inputs consumed by the common.sh helpers.
+DOCKERFILE="$LLAMA_CPP_DIR/.devops/vulkan.Dockerfile"
+IMAGE_NAME="local/llama.cpp:server-vulkan"
+MODEL_DIR="/models/gguf"
+SERVER_NAME="llama-vulkan-server"
+# llama.cpp serves over Vulkan through /dev/dri.
+EXTRA_RUN_ARGS=(--device /dev/dri:/dev/dri)
+
 select_model "$MODEL_DEFAULT_INDEX" "${1:-}" "${LLAMA_MODEL:-}"
 MODEL_NAME="$MODEL_TAG"
 MODEL_PATH="$MODEL_DIR/$MODEL_NAME"
 
+# 1. Clone llama.cpp if not present
+clone_llama_cpp "$LLAMA_CPP_DIR"
+
 # 2. Build the Vulkan server image from the local clone
-docker build -f "$DOCKERFILE" --target server -t "$IMAGE_NAME" "$LLAMA_CPP_DIR"
+build_llama_server
 
 # 3. Download the model if it is not present yet (fetch on demand via MODEL_URLS)
-if [ ! -f "$MODEL_PATH" ]; then
-  mkdir -p "$(dirname "$MODEL_PATH")"
-  if [ -z "${MODEL_URLS[$MODEL_NAME]:-}" ]; then
-    echo "ERROR: no download URL for '$MODEL_NAME' in MODEL_URLS." >&2
-    exit 1
-  fi
-  echo "Downloading $MODEL_NAME ..."
-  wget -O "$MODEL_PATH" "${MODEL_URLS[$MODEL_NAME]}"
-fi
+download_model "$MODEL_NAME"
 
 # 4. Run the Vulkan server (PORT default 9931, shared with hipfire/OFLM -- run alone on it)
 PORT="${PORT:-9931}"
-docker run --rm --name llama-vulkan-server \
-  --device /dev/dri:/dev/dri \
-  -v /models:/models \
-  -p "$PORT:$PORT" \
-  "$IMAGE_NAME" \
-  --model "$MODEL_PATH" \
-  --host 0.0.0.0 \
-  --port "$PORT" \
-  --reasoning-effort medium
+run_llama_server
