@@ -40,7 +40,7 @@ NPU_CACHE="./npu-cache"    # NPU runtime cache
 # runtime model_list.json knows. ornith is shape-identical to qwen3.6-35b-a3b, so
 # it installs at runtime with `oflm add`, which links the matching family kernels
 # instead of shipping its own xclbins (see oflm-add README).
-OFLM_CHOICES=(
+CHOICES=(
   "qwen3.6-35b-a3b|qwen3.6-moe:35b-a3b"
   "ornith1.5-35b-a3b|ornith-1.5:35b-a3b"
   "phi4-mini-it:4b|phi4-mini-it:4b"
@@ -49,34 +49,27 @@ OFLM_CHOICES=(
   "gemma4-it:12b|gemma4-it:12b"
   "gpt-oss:20b|gpt-oss:20b"
 )
+MENU_TITLE="OpenFlowLM model selection (runs on the AMD Ryzen AI XDNA2 NPU):"
 MODEL_DEFAULT_INDEX=1   # qwen3.6-35b-a3b
+# Shared interactive menu mechanism (see common.sh); resolves MODEL_TAG from CHOICES.
+. "$(dirname "$0")/common.sh"
 
-# Resolve the selection: explicit OFLM_MODEL wins; else a numeric first arg
-# (./run_openflowlm.sh 2); else prompt when attached to a terminal; else default.
-# Each choice is "label|oflm-tag"; the tag (after the |) is the registry key.
-choice="${1:-}"
-if [ -n "${OFLM_MODEL:-}" ]; then
-  MODEL_TAG="$OFLM_MODEL"
-elif [[ ! "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt "${#OFLM_CHOICES[@]}" ]; then
-  if [ -t 0 ]; then
-    echo "OpenFlowLM model selection (runs on the AMD Ryzen AI XDNA2 NPU):"
-    for idx in "${!OFLM_CHOICES[@]}"; do
-      printf "  %d) %s\n" "$((idx+1))" "${OFLM_CHOICES[idx]%|*}"
-    done
-    read -rp "Choose a model [1-${#OFLM_CHOICES[@]}] (default $MODEL_DEFAULT_INDEX): " choice
-    choice="${choice:-$MODEL_DEFAULT_INDEX}"
-  else
-    choice="$MODEL_DEFAULT_INDEX"
-  fi
-  # Reject anything still invalid (bad arg or prompt input); fall back to default.
-  if [[ ! "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt "${#OFLM_CHOICES[@]}" ]; then
-    echo "Invalid choice '$choice'; using default qwen3.6-35b-a3b" >&2
-    choice="$MODEL_DEFAULT_INDEX"
-  fi
-fi
-MODEL_TAG="${OFLM_CHOICES[$((choice-1))]#*|}"
-echo "Selected model: $MODEL_TAG"
+select_model "$MODEL_DEFAULT_INDEX" "${1:-}" "${OFLM_MODEL:-}"
 mkdir -p "$DATA_DIR"
+
+# Context length per model tag: OFLM's registry default_context_length -- the
+# safe, validated max that fits in NPU memory. The kernels are context-size
+# agnostic, but --ctx-len 262144 (the RoPE max) OOMs the 35B model, so use each
+# model's real limit instead (nanbeige4.1 and gpt-oss cap lower than the rest).
+declare -A MODEL_CTX=(
+  ["qwen3.6-moe:35b-a3b"]=32768
+  ["ornith-1.5:35b-a3b"]=32768
+  ["phi4-mini-it:4b"]=32768
+  ["nanbeige4.1:3b"]=8192
+  ["gemma4-it:e4b"]=32768
+  ["gemma4-it:12b"]=32768
+  ["gpt-oss:20b"]=8192
+)
 
 # build_in_docker.sh runs `docker run -it`, which needs a TTY. In a non-interactive
 # session (CI, ssh without a pty) there is no TTY, so allocate a pseudo-TTY with
@@ -155,6 +148,8 @@ else
 fi
 
 # 4. Serve the OpenAI-compatible API on $PORT with the NPU passed through.
+#    --ctx-len defaults to the model's registry limit; override with OFLM_CTX_LEN.
+CTX_LEN="${OFLM_CTX_LEN:-${MODEL_CTX[$MODEL_TAG]:-32768}}"
 docker rm -f oflm_server 2>/dev/null || true
 docker run --rm --name oflm_server --init \
   --cap-add=IPC_LOCK \
@@ -162,8 +157,8 @@ docker run --rm --name oflm_server --init \
   --device /dev/accel/accel0 \
   --security-opt seccomp=unconfined \
   -e OFLM_HF_OWNER="$OFLM_HF_OWNER" \
-   -v "$DATA_DIR":/root/.config/oflm \
-   -v "$PWD/$NPU_CACHE":/root/.npu/cache \
+    -v "$DATA_DIR":/root/.config/oflm \
+    -v "$PWD/$NPU_CACHE":/root/.npu/cache \
   -p "$PORT:$PORT" \
   "$IMAGE_RUNTIME" \
-  serve "$MODEL_TAG" --host 0.0.0.0 --port "$PORT"
+  serve "$MODEL_TAG" --host 0.0.0.0 --port "$PORT" --ctx-len "$CTX_LEN"
