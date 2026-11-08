@@ -21,19 +21,18 @@ set -euo pipefail
 # by docker). The runtime image is quick.
 
 OFLM_DIR="OpenFlowLM-Next"
-IMAGE_BUILD="openflowlm-build:ubuntu26"
 IMAGE_RUNTIME="openflowlm:runtime"
 
-OFLM_HF_OWNER="${OFLM_HF_OWNER:-Atomic-Germ}"        # both Atomic-Germ/ and FastFlowLM/ host the model
+OFLM_HF_OWNER="${OFLM_HF_OWNER:-Atomic-Germ}" # both Atomic-Germ/ and FastFlowLM/ host the model
 
-PORT="${PORT:-9931}"                                  # same as hipfire / llama.cpp -- run OFLM alone on it
-DEB_BUILT="$OFLM_DIR/.oflm-deb-built"   # outside build/ so clean-build keeps it
+PORT="${PORT:-9931}"                  # same as hipfire / llama.cpp -- run OFLM alone on it
+DEB_BUILT="$OFLM_DIR/.oflm-deb-built" # outside build/ so clean-build keeps it
 
 # Models are OFLM's own Q4NX format (not GGUF), so they live in /models/openflowlm
 # rather than /models/gguf. This is mounted at the runtime image's OFLM_MODEL_PATH
 # (/root/.config/oflm), where the registry overlay + xclbin symlinks also live.
 DATA_DIR="/models/openflowlm"
-NPU_CACHE="./npu-cache"    # NPU runtime cache
+NPU_CACHE="./npu-cache" # NPU runtime cache
 
 # --- Model selection menu ----------------------------------------------------
 # Each choice is "label|oflm-tag"; the tag is the registry key (family:size) the
@@ -50,7 +49,7 @@ CHOICES=(
   "gpt-oss:20b|gpt-oss:20b"
 )
 MENU_TITLE="OpenFlowLM model selection (runs on the AMD Ryzen AI XDNA2 NPU):"
-MODEL_DEFAULT_INDEX=1   # qwen3.6-35b-a3b
+MODEL_DEFAULT_INDEX=1 # qwen3.6-35b-a3b
 # Shared interactive menu mechanism (see common.sh); resolves MODEL_TAG from CHOICES.
 . "$(dirname "$0")/common.sh"
 
@@ -78,7 +77,8 @@ run_interactive() {
   if [ -t 0 ] && [ -t 1 ]; then
     "$@"
   else
-    script -qec "$1 ${@:2}" /dev/null
+    local extra=("${@:2}")
+    script -qec "$1 ${extra[*]}" /dev/null
   fi
 }
 
@@ -97,7 +97,7 @@ if [ ! -d "$OFLM_DIR" ]; then
   git clone https://github.com/Atomic-Germ/OpenFlowLM-Next.git "$OFLM_DIR"
 fi
 if [ -d "$OFLM_DIR/.git" ]; then
-  ( cd "$OFLM_DIR" && git submodule update --init --recursive >/dev/null 2>&1 || true )
+  (cd "$OFLM_DIR" && git submodule update --init --recursive >/dev/null 2>&1 || true)
 fi
 
 # 1. Build the builder image, export the kernels, and package the .deb.
@@ -110,8 +110,8 @@ fi
 if [ ! -f "$DEB_BUILT" ] || [ "${OFLM_REBUILD:-0}" = "1" ]; then
   rm -rf "$OFLM_DIR/build"
   echo "Building builder image + packaging .deb (first run is slow: mlir-aie toolchain)..."
-  ( cd "$OFLM_DIR" && NPU_CACHE_HOME="$PWD/$NPU_CACHE" run_interactive ./build_in_docker.sh linux-package-deb )
-  : > "$DEB_BUILT"
+  (cd "$OFLM_DIR" && NPU_CACHE_HOME="$PWD/$NPU_CACHE" run_interactive ./build_in_docker.sh linux-package-deb)
+  : >"$DEB_BUILT"
 else
   echo "Builder image already packaged; skipping build (set OFLM_REBUILD=1 to force)."
 fi
@@ -126,8 +126,8 @@ docker build --target runtime -f "$OFLM_DIR/Dockerfile" -t "$IMAGE_RUNTIME" "$OF
 #    the model is already installed, so only run it if the tag is not registered.
 docker rm -f oflm_pull 2>/dev/null || true
 if [[ "$MODEL_TAG" == ornith-* ]]; then
-  if docker run --rm -v "$DATA_DIR":/root/.config/oflm openflowlm:runtime \
-       list --filter installed 2>/dev/null | grep -qwF "$MODEL_TAG"; then
+  if grep -qwF "$MODEL_TAG" < <(docker run --rm -v "$DATA_DIR":/root/.config/oflm openflowlm:runtime \
+    list --filter installed 2>/dev/null); then
     echo "Model already installed: $MODEL_TAG"
   else
     docker run --rm --name oflm_pull \
@@ -135,9 +135,9 @@ if [[ "$MODEL_TAG" == ornith-* ]]; then
       -v "$DATA_DIR":/root/.config/oflm \
       "$IMAGE_RUNTIME" \
       add "Atomic-Germ/Ornith-1.5-35B-A3B-NPU2" \
-          --family qwen3.6-moe \
-          --tag "$MODEL_TAG" \
-          --xclbin-from Qwen3.6-35B-A3B-NPU2
+      --family qwen3.6-moe \
+      --tag "$MODEL_TAG" \
+      --xclbin-from Qwen3.6-35B-A3B-NPU2
   fi
 else
   docker run --rm --name oflm_pull \
@@ -157,8 +157,8 @@ docker run --rm --name oflm_server --init \
   --device /dev/accel/accel0 \
   --security-opt seccomp=unconfined \
   -e OFLM_HF_OWNER="$OFLM_HF_OWNER" \
-    -v "$DATA_DIR":/root/.config/oflm \
-    -v "$PWD/$NPU_CACHE":/root/.npu/cache \
+  -v "$DATA_DIR":/root/.config/oflm \
+  -v "$PWD/$NPU_CACHE":/root/.npu/cache \
   -p "$PORT:$PORT" \
   "$IMAGE_RUNTIME" \
   serve "$MODEL_TAG" --host 0.0.0.0 --port "$PORT" --ctx-len "$CTX_LEN"

@@ -3,6 +3,11 @@ set -euo pipefail
 
 # llama.cpp Vulkan server launcher
 LLAMA_CPP_DIR="llama.cpp"
+# Clone llama.cpp if not present
+if [ ! -d "$LLAMA_CPP_DIR" ]; then
+  git clone https://github.com/ggml-org/llama.cpp.git
+fi
+
 DOCKERFILE="$LLAMA_CPP_DIR/.devops/vulkan.Dockerfile"
 IMAGE_NAME="local/llama.cpp:server-vulkan"
 MODEL_DIR="/models/gguf"
@@ -21,7 +26,7 @@ CHOICES=(
   "qwen3-coder-30b|Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf"
 )
 MENU_TITLE="llama.cpp model selection (runs on the AMD Radeon GPU via Vulkan):"
-MODEL_DEFAULT_INDEX=1   # ornith-1.5-35B-A3B-GGUF
+MODEL_DEFAULT_INDEX=1 # ornith-1.5-35B-A3B-GGUF
 # label -> download URL, keyed by GGUF filename; add entries for extra models.
 declare -A MODEL_URLS=(
   ["Ornith-1.5-35B-Q4_K_M.gguf"]="https://huggingface.co/ornith-ai/Ornith-1.5-35B-A3B-GGUF/resolve/main/Ornith-1.5-35B-Q4_K_M.gguf?download=true"

@@ -40,7 +40,7 @@ select_model() {
   elif [ -t 0 ]; then
     echo "${MENU_TITLE:-Model selection}"
     for idx in "${!CHOICES[@]}"; do
-      printf "  %d) %s\n" "$((idx+1))" "${CHOICES[idx]%|*}"
+      printf "  %d) %s\n" "$((idx + 1))" "${CHOICES[idx]%|*}"
     done
     read -rp "Choose a model [1-$n] (default $default_index): " choice
     choice="${choice:-$default_index}"
@@ -54,6 +54,6 @@ select_model() {
     choice="$default_index"
   fi
 
-  MODEL_TAG="${CHOICES[$((choice-1))]#*|}"
+  MODEL_TAG="${CHOICES[$((choice - 1))]#*|}"
   echo "Selected model: $MODEL_TAG"
 }
