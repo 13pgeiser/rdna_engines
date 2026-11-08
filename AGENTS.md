@@ -7,14 +7,18 @@ try to commit changes into `hipfire/` or `llama.cpp/`; those are upstream clones
 and re-clone automatically if missing.
 
 - `hipfire/` — Rust + HIP + Redline inference server (ROCm)
-- `llama.cpp/` — C++ llama.cpp with a Vulkan server build
+- `llama.cpp/` — C++ llama.cpp with Vulkan and ROCm server builds
 
 ## Run the servers (entrypoints)
 ```
-./run_hipfire.sh      # ROCm server, model qwen3.6:35b-a3b, max-seq 262144
-./run_llama_cpp.sh    # Vulkan server, model Ornith-1.5-35B-Q4_K_M.gguf
+./run_hipfire.sh       # ROCm server, max-seq 262144
+./run_llama_vulkan.sh  # Vulkan server (AMD Radeon GPU)
+./run_llama_rocm.sh    # ROCm server (AMD GPU)
 ```
 Each builds its Docker image, fetches the model, and runs the serve command.
+`run_llama_vulkan.sh` and `run_llama_rocm.sh` share clone/build/download/run logic in
+`common.sh`; only the backend inputs (`DOCKERFILE`, `IMAGE_NAME`, `EXTRA_RUN_ARGS`)
+differ. `run_hipfire.sh` also uses `common.sh` for its model menu.
 
 ## Gotchas
 - **Both scripts bind port `9931`. Run only one at a time** — starting the other
