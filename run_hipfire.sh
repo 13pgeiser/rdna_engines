@@ -36,7 +36,7 @@ fi
 # 2. Build the image locally from the clone (full carries hipcc; gfx1152 is
 #    JIT-only and compiles its kernels at serve time, so the runtime target
 #    cannot be used here).
-docker build -f "$DOCKERFILE" --target full -t "$IMAGE_NAME" "$HIPFIRE_DIR"
+docker build --progress=plain -f "$DOCKERFILE" --target full -t "$IMAGE_NAME" "$HIPFIRE_DIR"
 
 # 3. Pull the model into the mounted models dir (idempotent; skips already-verified files)
 mkdir -p "$MODELS_DIR"

@@ -79,7 +79,7 @@ clone_llama_cpp() {
 # build_llama_server
 # Build the backend server image (target server) from the local llama.cpp clone.
 build_llama_server() {
-  docker build -f "$DOCKERFILE" --target server -t "$IMAGE_NAME" "$LLAMA_CPP_DIR"
+  docker build --progress=plain -f "$DOCKERFILE" --target server -t "$IMAGE_NAME" "$LLAMA_CPP_DIR"
 }
 
 # download_model <name>

@@ -61,13 +61,13 @@ mkdir -p "$DATA_DIR"
 # agnostic, but --ctx-len 262144 (the RoPE max) OOMs the 35B model, so use each
 # model's real limit instead (nanbeige4.1 and gpt-oss cap lower than the rest).
 declare -A MODEL_CTX=(
-  ["qwen3.6-moe:35b-a3b"]=32768
-  ["ornith-1.5:35b-a3b"]=32768
-  ["phi4-mini-it:4b"]=32768
-  ["nanbeige4.1:3b"]=8192
-  ["gemma4-it:e4b"]=32768
-  ["gemma4-it:12b"]=32768
-  ["gpt-oss:20b"]=8192
+  ["qwen3.6-moe:35b-a3b"]=262144
+  ["ornith-1.5:35b-a3b"]=262144
+  ["phi4-mini-it:4b"]=131072
+  ["nanbeige4.1:3b"]=262144
+  ["gemma4-it:e4b"]=262144
+  ["gemma4-it:12b"]=262144
+  ["gpt-oss:20b"]=131072
 )
 
 # build_in_docker.sh runs `docker run -it`, which needs a TTY. In a non-interactive
