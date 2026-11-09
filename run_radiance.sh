@@ -32,8 +32,7 @@ declare -A MODEL_URLS=(
 . "$(dirname "$0")/common.sh"
 
 # Per-engine build/run flags (defaults match radiance's qwen3.6-35b-a3b.yaml compose).
-GPU_TARGETS="${GPU_TARGETS:-gfx1201;gfx11-generic;gfx1151}"
-TP="${TP:-1}"
+GPU_TARGETS="${GPU_TARGETS:-gfx1152;gfx1201}"
 
 select_model "$MODEL_DEFAULT_INDEX" "${1:-}" "${RADIANCE_MODEL:-}"
 MODEL_NAME="$MODEL_TAG"
@@ -79,7 +78,5 @@ docker run --rm --name radiance_server \
   --model "/models/$MODEL_NAME" \
   --host 0.0.0.0 \
   --port "$PORT" \
-  --tp "$TP" \
-  --max-num-seqs 32 \
-  --max-model-len 200000 \
+  --max-model-len 262144 \
   --kv-cache-dtype fp8
