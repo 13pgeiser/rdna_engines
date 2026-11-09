@@ -17,6 +17,7 @@ CHOICES=(
   "gpt-oss-20b|gpt-oss-20b-Q4_K_M.gguf"
   "qwen3-coder-30b|Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf"
   "qwen3.6-35b-a3b-ud|Qwen3.6-35B-A3B-UD-Q4_K_M.gguf"
+  "flint|flint-UD-Q4_K_XL.gguf"
 )
 MENU_TITLE="llama.cpp model selection (runs on the AMD Radeon GPU via Vulkan):"
 MODEL_DEFAULT_INDEX=1 # ornith-1.5-35B-A3B-GGUF
@@ -30,6 +31,7 @@ declare -A MODEL_URLS=(
   ["gpt-oss-20b-Q4_K_M.gguf"]="https://huggingface.co/unsloth/gpt-oss-20b-GGUF/resolve/main/gpt-oss-20b-Q4_K_M.gguf?download=true"
   ["Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf"]="https://huggingface.co/unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF/resolve/main/Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf?download=true"
   ["Qwen3.6-35B-A3B-UD-Q4_K_M.gguf"]="https://huggingface.co/unsloth/Qwen3.6-35B-A3B-GGUF/resolve/main/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf?download=true"
+  ["flint-UD-Q4_K_XL.gguf"]="https://huggingface.co/unsloth/flint-GGUF/resolve/main/flint-UD-Q4_K_XL.gguf?download=true"
 )
 # Shared interactive menu mechanism (see common.sh); resolves MODEL_TAG from CHOICES.
 . "$(dirname "$0")/common.sh"
