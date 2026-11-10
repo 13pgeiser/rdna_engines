@@ -36,6 +36,12 @@ require_gpu gfx1152 gfx1201
 
 # Per-engine build/run flags (defaults match radiance's qwen3.6-35b-a3b.yaml compose).
 GPU_TARGETS="${GPU_TARGETS:-gfx1152;gfx1201}"
+# radiance's default of 256 sequences cannot fit a 32 GiB card: the linear/conv state
+# alone is ~290 MiB a sequence for qwen3.8-27b (74 GiB at 256) against a ~10.5 GiB
+# vram_kv budget, so startup dies with "vram_kv does not fit its fixed costs". 1
+# sequence (single user) keeps the fixed cost near 0.3 GiB; raise MAX_NUM_SEQS for
+# concurrent requests (~290 MiB VRAM + ~1.5 GiB pinned host RAM each).
+MAX_NUM_SEQS="${MAX_NUM_SEQS:-1}"
 
 select_model "$MODEL_DEFAULT_INDEX" "${1:-}" "${RADIANCE_MODEL:-}"
 MODEL_NAME="$MODEL_TAG"
@@ -82,4 +88,5 @@ docker run --rm --name radiance_server \
   --host 0.0.0.0 \
   --port "$PORT" \
   --max-model-len 262144 \
+  --max-num-seqs "$MAX_NUM_SEQS" \
   --kv-cache-dtype fp8

@@ -159,6 +159,8 @@ download_model() {
 # run_llama_server
 # Run the backend server with the GPU passed through. EXTRA_RUN_ARGS holds the
 # per-backend device flags (e.g. --device /dev/dri).
+# --parallel: single user, 1 slot; llama.cpp's default (auto) is 4 slots with a
+# unified KV pool, splitting the card across sequences that never exist here.
 run_llama_server() {
   docker rm -f "$SERVER_NAME" 2>/dev/null || true
   docker run --rm --name "$SERVER_NAME" \
@@ -169,5 +171,6 @@ run_llama_server() {
     --model "$MODEL_PATH" \
     --host 0.0.0.0 \
     --port "$PORT" \
+    --parallel "${LLAMA_PARALLEL:-1}" \
     --reasoning-effort medium
 }
