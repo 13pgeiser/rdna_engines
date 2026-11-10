@@ -19,7 +19,7 @@ CHOICES=(
   "gemma4-12b|gemma4-12b-i8g.rad"
 )
 MENU_TITLE="radiance model selection (runs on the AMD Radeon GPU via HIP):"
-MODEL_DEFAULT_INDEX=2 # qwen3.6-35b-a3b-fp8
+MODEL_DEFAULT_INDEX=1 # qwen3.8-27b-mxfp4
 # label -> download URL, keyed by .rad filename; add entries for extra models.
 declare -A MODEL_URLS=(
   ["qwen3.8-27b-mxfp4.rad"]="https://huggingface.co/StillDeadcode/qwen3.8-27b-mxfp4/resolve/main/qwen3.8-27b-mxfp4.rad"

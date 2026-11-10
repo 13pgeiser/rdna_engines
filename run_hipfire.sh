@@ -8,8 +8,8 @@ HIPFIRE_DIR="hipfire"
 # engine keeps its own CHOICES. The value after the | is the hipfire model tag
 # passed to `hipfire serve`.
 CHOICES=(
-  "qwen3.6:35b-a3b|qwen3.6:35b-a3b"
   "qwen3.8:27b-mq4-xts|qwen3.8:27b-mq4-xts"
+  "qwen3.6:35b-a3b|qwen3.6:35b-a3b"
   "ornith-1.5:35b-a3b|ornith-1.5:35b-a3b"
 )
 MENU_TITLE="hipfire model selection (runs on the AMD Radeon GPU via ROCm):"
