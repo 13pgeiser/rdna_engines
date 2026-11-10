@@ -1,42 +1,51 @@
 # AGENTS.md
 
 ## What this repo is
-Root orchestration for **two AMD RDNA / local LLM inference servers**. The actual
-source lives in two git-cloned subdirectories that are **gitignored** — do not
-try to commit changes into `hipfire/` or `llama.cpp/`; those are upstream clones
-and re-clone automatically if missing.
+Launchers + shared shell for **local LLM inference servers on AMD hardware**
+(RDNA GPU and Ryzen AI XDNA2 NPU). Engine source lives in gitignored
+subdirectories that are re-cloned automatically if missing — never commit
+changes into `hipfire/`, `llama.cpp/`, `radiance/`, `FastFlowLM/`, or
+`OpenFlowLM-Next/`.
 
-- `hipfire/` — Rust + HIP + Redline inference server (ROCm)
-- `llama.cpp/` — C++ llama.cpp with Vulkan and ROCm server builds
+## Entry points
+```
+./run_hipfire.sh      # GPU (ROCm)
+./run_llama_vulkan.sh # GPU (Vulkan)
+./run_llama_rocm.sh   # GPU (ROCm)
+./run_radiance.sh     # GPU (HIP)
+./run_fastflowlm.sh   # NPU (XDNA2)
+./run_openflowlm.sh   # NPU (XDNA2)
+```
+Each clones its engine, builds its Docker image, pulls the model
+(idempotent), and serves an **OpenAI-compatible API** on port `9931`
+(override with `PORT`). All share `common.sh`: the interactive model menu
+(numeric arg, `*_MODEL` env override, or prompt) plus hardware preflights.
 
-## Run the servers (entrypoints)
-```
-./run_hipfire.sh       # ROCm server, max-seq 262144
-./run_llama_vulkan.sh  # Vulkan server (AMD Radeon GPU)
-./run_llama_rocm.sh    # ROCm server (AMD GPU)
-```
-Each builds its Docker image, fetches the model, and runs the serve command.
-`run_llama_vulkan.sh` and `run_llama_rocm.sh` share clone/build/download/run logic in
-`common.sh`; only the backend inputs (`DOCKERFILE`, `IMAGE_NAME`, `EXTRA_RUN_ARGS`)
-differ. `run_hipfire.sh` also uses `common.sh` for its model menu.
+## Hardware preflights (enforced in common.sh, exit 1)
+- GPU id from `/sys/class/drm/card0/device/device`: `0x1114` = gfx1152,
+  `0x7551` = gfx1201. Any other id stops **every** engine, even if it might
+  support the hardware.
+- NPU engines (fastflowlm/openflowlm) run on gfx1152 only; GPU engines on
+  both. NPU engines also require `/dev/accel/accel0`.
 
 ## Gotchas
-- **Both scripts bind port `9931`. Run only one at a time** — starting the other
-  will fail to bind.
-- **GPU prerequisites (RDNA AMD):** need `/dev/kfd` + `/dev/dri` (`llama.cpp` uses
-  `/dev/dri`), the `video` and `render` group memberships, and `--security-opt
-  seccomp=unconfined` for hipfire. Vulkan (llama.cpp) uses `/dev/dri`.
-- **Model locations:** hipfire → `/models/hipfire`, llama.cpp → `/models/gguf`.
-  Scripts pull/download idempotently.
-- hipfire serves an **OpenAI-compatible API** (e.g. `/v1/chat/completions`).
-- hipfire builds with target `full` (JIT allowed); ROCm 10.1 on Ubuntu 26.04
-  (target `runtime` ships indexed packs + runtime libs only).
+- **Default port 9931 is shared by all launchers** — run one at a time, or set
+  `PORT`. NPU engines are a separate process and can run alongside a GPU
+  engine on a different port.
+- **GPU engines** need `/dev/dri` and `video`/`render` group membership;
+  hipfire and radiance also pass `/dev/kfd` + `--security-opt
+  seccomp=unconfined`.
+- **NPU engines** need the amdxdna driver + AMD XRT stack (`/dev/accel/accel0`)
+  and run with `IPC_LOCK` + memlock ulimits. They compute on the NPU, not the
+  GPU.
+- **First NPU builds are slow** (OpenFlowLM compiles the mlir-aie toolchain).
+  Caching markers: `OpenFlowLM-Next/.oflm-deb-built` (force with
+  `OFLM_REBUILD=1`), `FastFlowLM/.flm-built` (force with `FLM_REBUILD=1`).
+- hipfire builds with target `full` — `runtime` cannot be used because gfx1152
+  is JIT-only and compiles kernels at serve time.
+- Model locations: `/models/hipfire`, `/models/gguf` (llama.cpp),
+  `/models/rad`, `/models/openflowlm`, `/models/fastflowlm`.
 
-## Build targets (from the sub-clones)
-- hipfire: `docker build -f hipfire/Containerfile --target full -t local/hipfire:full hipfire`
-- llama.cpp: `docker build -f llama.cpp/.devops/vulkan.Dockerfile --target server -t local/llama.cpp:server-vulkan llama.cpp`
-
-## Environment notes
-- hipfire ships models at run time (never baked into the image) and drops from
-  root to uid 1000 after granting device groups.
-- hipfire GPU arches: `gfx1100 gfx1151 gfx1201`; ROCm package `10.1.0`.
+## Verify shell changes
+`./check.sh` — runs `shfmt` (formats in place) and `shellcheck` over all
+`*.sh` via docker. There is no test suite; this is the only check.
