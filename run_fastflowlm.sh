@@ -90,6 +90,52 @@ require_gpu gfx1152
 select_model "$MODEL_DEFAULT_INDEX" "${1:-}" "${FLM_MODEL:-}"
 mkdir -p "$DATA_DIR"
 
+# Context length per model tag: the model's max context (RoPE max, per the
+# FastFlowLM docs), not the engine's low default_context_length (1k-32k). The
+# "Flash" variants and hy-mt2-flash have a fixed 1k limit (overrides ignored),
+# hy-memory is fixed at 16k; whisper/embed have no chat context, so they keep
+# the engine default.
+declare -A MODEL_CTX=(
+  ["qwen3.6-moe:35b-a3b"]=262144
+  ["qwen3.8-mtp:27b"]=262144
+  ["gpt-oss:20b"]=131072
+  ["deepseek-r1:8b"]=131072
+  ["deepseek-r1-0528:8b"]=65536
+  ["lfm3:1.7b"]=32768
+  ["gemma4-it:12b"]=131072
+  ["gemma4-it:e4b"]=131072
+  ["gemma4-it:e2b"]=131072
+  ["gemma4e-flash:e4b"]=1024
+  ["gemma3:4b"]=131072
+  ["gemma3:1b"]=32768
+  ["medgemma:4b"]=131072
+  ["qwen3.5:9b"]=262144
+  ["qwen3.5:4b"]=262144
+  ["qwen3.5:2b"]=262144
+  ["qwen3.5:0.8b"]=262144
+  ["qwen3:8b"]=32768
+  ["qwen3:4b"]=32768
+  ["qwen3:1.7b"]=32768
+  ["qwen3:0.6b"]=32768
+  ["qwen3-tk:4b"]=262144
+  ["qwen3-it:4b"]=262144
+  ["qwen2.5-it:3b"]=32768
+  ["llama3.2:3b"]=131072
+  ["llama3.2:1b"]=131072
+  ["llama3.1:8b"]=131072
+  ["phi4-mini-it:4b"]=131072
+  ["hy-mt2-flash:1.8b"]=1024
+  ["hy-memory:30b-a3b"]=16384
+  ["nanbeige4.1:3b"]=262144
+  ["lfm2:2.6b"]=32768
+  ["lfm2:1.2b"]=32768
+  ["lfm2.5-it:1.2b"]=32768
+  ["qwen3vl-it:4b"]=262144
+  ["qwen3vl-flash:4b"]=1024
+  ["whisper-v3:turbo"]=448
+  ["embed-gemma:300m"]=2048
+)
+
 # Preflight: FLM needs the AMD XDNA NPU. Without it the run fails inside anyway.
 require_accel_device
 
@@ -151,7 +197,8 @@ docker run --rm --name flm_pull \
   pull "$MODEL_TAG"
 
 # 4. Serve the OpenAI-compatible API on $PORT with the NPU passed through.
-#    --ctx-len defaults to the model's own validated context length.
+#    --ctx-len defaults to the model's max context; override with FLM_CTX_LEN.
+CTX_LEN="${FLM_CTX_LEN:-${MODEL_CTX[$MODEL_TAG]:-32768}}"
 docker rm -f flm_server >/dev/null 2>&1 || true
 docker run --rm --name flm_server --init \
   --cap-add=IPC_LOCK \
@@ -164,4 +211,4 @@ docker run --rm --name flm_server --init \
   -v "$PWD/$NPU_CACHE":/root/.npu/cache \
   -p "$PORT:$PORT" \
   "$IMAGE_RUNTIME" \
-  serve "$MODEL_TAG" --host 0.0.0.0 --port "$PORT"
+  serve "$MODEL_TAG" --host 0.0.0.0 --port "$PORT" --ctx-len "$CTX_LEN"

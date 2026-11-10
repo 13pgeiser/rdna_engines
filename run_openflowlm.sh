@@ -59,17 +59,16 @@ require_gpu gfx1152
 select_model "$MODEL_DEFAULT_INDEX" "${1:-}" "${OFLM_MODEL:-}"
 mkdir -p "$DATA_DIR"
 
-# Context length per model tag: OFLM's registry default_context_length -- the
-# safe, validated max that fits in NPU memory. The kernels are context-size
-# agnostic, but --ctx-len 262144 (the RoPE max) OOMs the 35B model, so use each
-# model's real limit instead (nanbeige4.1 and gpt-oss cap lower than the rest).
+# Context length per model tag: the model's max context (RoPE max, per the
+# FastFlowLM docs), not the engine's low default_context_length. qwen3.6 /
+# ornith / nanbeige run at 262144; gemma4, phi4-mini and gpt-oss cap at 131072.
 declare -A MODEL_CTX=(
   ["qwen3.6-moe:35b-a3b"]=262144
   ["ornith-1.5:35b-a3b"]=262144
   ["phi4-mini-it:4b"]=131072
   ["nanbeige4.1:3b"]=262144
-  ["gemma4-it:e4b"]=262144
-  ["gemma4-it:12b"]=262144
+  ["gemma4-it:e4b"]=131072
+  ["gemma4-it:12b"]=131072
   ["gpt-oss:20b"]=131072
 )
 
@@ -134,7 +133,7 @@ else
 fi
 
 # 4. Serve the OpenAI-compatible API on $PORT with the NPU passed through.
-#    --ctx-len defaults to the model's registry limit; override with OFLM_CTX_LEN.
+#    --ctx-len defaults to the model's max context; override with OFLM_CTX_LEN.
 CTX_LEN="${OFLM_CTX_LEN:-${MODEL_CTX[$MODEL_TAG]:-32768}}"
 docker rm -f oflm_server 2>/dev/null || true
 docker run --rm --name oflm_server --init \
