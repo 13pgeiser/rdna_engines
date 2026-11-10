@@ -70,4 +70,5 @@ docker run --rm --name "$SERVER_NAME" \
   serve \
   "$MODEL_NAME" \
   "0.0.0.0:$PORT" \
-  --max-seq 262144
+  --max-seq 262144 \
+  --idle-timeout 0
