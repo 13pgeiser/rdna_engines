@@ -58,6 +58,31 @@ select_model() {
   echo "Selected model: $MODEL_TAG"
 }
 
+# run_interactive <cmd> [args...]
+# docker run -it needs a TTY. In a non-interactive session (CI, ssh without a
+# pty) there is no TTY, so allocate a pseudo-TTY with `script` to satisfy it. A
+# real interactive terminal already has one and is used as-is.
+run_interactive() {
+  if [ -t 0 ] && [ -t 1 ]; then
+    "$@"
+  else
+    local extra=("${@:2}")
+    script -qec "$1 ${extra[*]}" /dev/null
+  fi
+}
+
+# require_accel_device
+# FastFlowLM / OpenFlowLM compute on the AMD XDNA NPU (/dev/accel), not the GPU.
+# Without the device the run fails inside the runtime anyway, so bail out early.
+require_accel_device() {
+  if [ ! -e /dev/accel/accel0 ]; then
+    echo "ERROR: no NPU device /dev/accel/accel0." >&2
+    echo "FastFlowLM and OpenFlowLM run on the AMD Ryzen AI XDNA2 NPU. See docs/linux-getting-started.md for" >&2
+    echo "the amdxdna driver + AMD XRT stack (libxrt-npu2) required before this can run." >&2
+    exit 1
+  fi
+}
+
 # --- llama.cpp shared helpers ------------------------------------------------
 # Used by run_llama_vulkan.sh and run_llama_rocm.sh. Each launcher sets the
 # globals these read before calling them (see the per-backend section of the

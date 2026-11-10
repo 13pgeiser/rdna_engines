@@ -70,25 +70,8 @@ declare -A MODEL_CTX=(
   ["gpt-oss:20b"]=131072
 )
 
-# build_in_docker.sh runs `docker run -it`, which needs a TTY. In a non-interactive
-# session (CI, ssh without a pty) there is no TTY, so allocate a pseudo-TTY with
-# `script` to satisfy it. A real interactive terminal already has one and is used as-is.
-run_interactive() {
-  if [ -t 0 ] && [ -t 1 ]; then
-    "$@"
-  else
-    local extra=("${@:2}")
-    script -qec "$1 ${extra[*]}" /dev/null
-  fi
-}
-
 # Preflight: OFLM needs the AMD XDNA NPU. Without it the run fails inside anyway.
-if [ ! -e /dev/accel/accel0 ]; then
-  echo "ERROR: no NPU device /dev/accel/accel0." >&2
-  echo "OpenFlowLM runs on the Ryzen AI XDNA2 NPU. See docs/linux-getting-started.md for" >&2
-  echo "the amdxdna driver + AMD XRT stack (libxrt-npu2) required before this can run." >&2
-  exit 1
-fi
+require_accel_device
 
 # 0. Clone OpenFlowLM-Next if not present (mirrors the hipfire / llama.cpp clones),
 #    then initialise git submodules (third_party/tokenizers-cpp is needed to configure).
