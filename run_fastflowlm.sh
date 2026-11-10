@@ -41,6 +41,7 @@ CHOICES=(
   "deepseek-r1-8b|deepseek-r1:8b"
   "deepseek-r1-0528-8b|deepseek-r1-0528:8b"
   "lfm3-1.7b|lfm3:1.7b"
+  "lfm2-trans-2.6b|lfm2-trans:2.6b"
   # gemma
   "gemma4-it-12b|gemma4-it:12b"
   "gemma4-it-8b|gemma4-it:e4b"
@@ -75,6 +76,7 @@ CHOICES=(
   # vision
   "qwen3vl-4b|qwen3vl-it:4b"
   "qwen3vl-flash-4b|qwen3vl-flash:4b"
+  "minicpm-v-4.7-1b|minicpm-v-4.7:1b"
   # asr / embed
   "whisper-v3-turbo|whisper-v3:turbo"
   "embed-gemma-300m|embed-gemma:300m"
@@ -132,6 +134,7 @@ declare -A MODEL_CTX=(
   ["lfm2.5-it:1.2b"]=32768
   ["qwen3vl-it:4b"]=262144
   ["qwen3vl-flash:4b"]=1024
+  ["minicpm-v-4.7:1b"]=32768
   ["whisper-v3:turbo"]=448
   ["embed-gemma:300m"]=2048
 )
