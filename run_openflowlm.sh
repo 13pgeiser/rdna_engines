@@ -53,6 +53,9 @@ MODEL_DEFAULT_INDEX=1 # qwen3.6-35b-a3b
 # Shared interactive menu mechanism (see common.sh); resolves MODEL_TAG from CHOICES.
 . "$(dirname "$0")/common.sh"
 
+# Preflight: only supported GPUs (OpenFlowLM runs on gfx1152 only).
+require_gpu gfx1152
+
 select_model "$MODEL_DEFAULT_INDEX" "${1:-}" "${OFLM_MODEL:-}"
 mkdir -p "$DATA_DIR"
 

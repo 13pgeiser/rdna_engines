@@ -36,6 +36,9 @@ declare -A MODEL_URLS=(
 # Shared interactive menu mechanism (see common.sh); resolves MODEL_TAG from CHOICES.
 . "$(dirname "$0")/common.sh"
 
+# Preflight: only supported GPUs (Vulkan runs on both).
+require_gpu gfx1152 gfx1201
+
 # Per-backend build/run inputs consumed by the common.sh helpers.
 DOCKERFILE="$LLAMA_CPP_DIR/.devops/vulkan.Dockerfile"
 IMAGE_NAME="local/llama.cpp:server-vulkan"

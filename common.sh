@@ -1,5 +1,6 @@
 #!/bin/bash
-# common.sh -- shared model-selection menu for run_*.sh launchers.
+# common.sh -- shared helpers (model-selection menu, preflight checks) for
+# run_*.sh launchers.
 #
 # Each launcher defines its own CHOICES array ("label|value" pairs) and calls
 # select_model to resolve which one. The selection mechanism is identical across
@@ -81,6 +82,38 @@ require_accel_device() {
     echo "the amdxdna driver + AMD XRT stack (libxrt-npu2) required before this can run." >&2
     exit 1
   fi
+}
+
+# require_gpu <arch>...
+# Preflight: identify the host GPU from its PCI device id and bail out unless
+# it matches one of the given RDNA architectures. Only two GPUs are supported
+# by any engine in this repo; any other hardware stops here even if an engine
+# might support it:
+#   0x1114 -> gfx1152   (FastFlowLM / OpenFlowLM only)
+#   0x7551 -> gfx1201   (all GPU engines)
+require_gpu() {
+  local path="/sys/class/drm/card0/device/device"
+  local id arch
+  if [ ! -r "$path" ]; then
+    echo "ERROR: cannot read $path -- no accessible AMD GPU?" >&2
+    exit 1
+  fi
+  id="$(cat "$path")"
+  case "$id" in
+  0x1114) arch="gfx1152" ;;
+  0x7551) arch="gfx1201" ;;
+  *) arch="unknown ($id)" ;;
+  esac
+
+  local supported
+  for supported in "$@"; do
+    if [ "$arch" = "$supported" ]; then
+      echo "GPU: $arch"
+      return 0
+    fi
+  done
+  echo "ERROR: GPU '$arch' is not supported by this engine (need: $*)." >&2
+  exit 1
 }
 
 # --- llama.cpp shared helpers ------------------------------------------------

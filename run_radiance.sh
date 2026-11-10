@@ -31,6 +31,9 @@ declare -A MODEL_URLS=(
 # Shared interactive menu mechanism (see common.sh); resolves MODEL_TAG from CHOICES.
 . "$(dirname "$0")/common.sh"
 
+# Preflight: only supported GPUs (radiance runs on both).
+require_gpu gfx1152 gfx1201
+
 # Per-engine build/run flags (defaults match radiance's qwen3.6-35b-a3b.yaml compose).
 GPU_TARGETS="${GPU_TARGETS:-gfx1152;gfx1201}"
 
