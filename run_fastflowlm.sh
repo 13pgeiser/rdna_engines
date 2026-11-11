@@ -37,6 +37,7 @@ CHOICES=(
   # flagship / reasoning
   "qwen3.6-35b-a3b|qwen3.6-moe:35b-a3b"
   "qwen3.8-27b|qwen3.8-mtp:27b"
+  "qwen3.8-dflash2-27b|qwen3.8-dflash2:27b"
   "gpt-oss-20b|gpt-oss:20b"
   "deepseek-r1-8b|deepseek-r1:8b"
   "deepseek-r1-0528-8b|deepseek-r1-0528:8b"
@@ -100,6 +101,7 @@ mkdir -p "$DATA_DIR"
 declare -A MODEL_CTX=(
   ["qwen3.6-moe:35b-a3b"]=262144
   ["qwen3.8-mtp:27b"]=262144
+  ["qwen3.8-dflash2:27b"]=8192 # [ERROR]  Failed to load model: attn_layout: max_len
   ["gpt-oss:20b"]=131072
   ["deepseek-r1:8b"]=131072
   ["deepseek-r1-0528:8b"]=65536
@@ -202,6 +204,7 @@ docker run --rm --name flm_pull \
 # 4. Serve the OpenAI-compatible API on $PORT with the NPU passed through.
 #    --ctx-len defaults to the model's max context; override with FLM_CTX_LEN.
 CTX_LEN="${FLM_CTX_LEN:-${MODEL_CTX[$MODEL_TAG]:-32768}}"
+echo "USING CTX_LEN: $CTX_LEN"
 docker rm -f flm_server >/dev/null 2>&1 || true
 docker run --rm --name flm_server --init \
   --cap-add=IPC_LOCK \
