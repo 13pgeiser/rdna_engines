@@ -13,7 +13,7 @@ CHOICES=(
   "ornith-1.5:35b-a3b|ornith-1.5:35b-a3b"
 )
 MENU_TITLE="hipfire model selection (runs on the AMD Radeon GPU via ROCm):"
-MODEL_DEFAULT_INDEX=1 # qwen3.6:35b-a3b
+MODEL_DEFAULT_INDEX=1 # qwen3.8:27b-mq4-xts
 # Shared interactive menu mechanism (see common.sh); resolves MODEL_TAG from CHOICES.
 . "$(dirname "$0")/common.sh"
 
@@ -25,7 +25,7 @@ DOCKERFILE="$HIPFIRE_DIR/Containerfile"
 IMAGE_NAME="local/hipfire:full"
 MODELS_DIR="/models/hipfire"
 SERVER_NAME="hipfire_server"
-PORT="${PORT:-9931}" # same as llama.cpp -- run alone on it
+PORT="${PORT:-${DEFAULT_PORT}}" # same as llama.cpp -- run alone on it
 
 select_model "$MODEL_DEFAULT_INDEX" "${1:-}" "${HIPFIRE_MODEL:-}"
 MODEL_NAME="$MODEL_TAG"
@@ -55,8 +55,10 @@ docker run --rm --name hipfire-pull \
 #    though this host user is not 1000. Wipe with: docker volume rm ...-compiled ...-runtime
 docker volume create --name "${SERVER_NAME}-kcache-compiled" >/dev/null 2>&1 || true
 docker volume create --name "${SERVER_NAME}-kcache-runtime" >/dev/null 2>&1 || true
-docker rm -f "$SERVER_NAME" >/dev/null 2>&1 || true
+stop_server "$SERVER_NAME"
+require_free_port "${PORT:-${DEFAULT_PORT}}"
 docker run --rm --name "$SERVER_NAME" \
+  --init \
   --network host \
   --device /dev/kfd \
   --device /dev/dri \
@@ -70,5 +72,6 @@ docker run --rm --name "$SERVER_NAME" \
   serve \
   "$MODEL_NAME" \
   "0.0.0.0:$PORT" \
-  --max-seq 262144 \
-  --idle-timeout 0
+  --max-seq "${HIPFIRE_MAX_SEQ:-262144}" \
+  --idle-timeout "${HIPFIRE_IDLE_TIMEOUT:-0}"
+echo "OpenAI-compatible API: http://127.0.0.1:${PORT:-${DEFAULT_PORT}}/v1"

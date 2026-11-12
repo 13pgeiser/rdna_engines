@@ -6,7 +6,7 @@ set -euo pipefail
 # Unlike hipfire (HIP/GPU) and llama.cpp (Vulkan/GPU), FLM computes on the NPU
 # (/dev/accel), not the GPU. This is a separate process, so it can run alongside
 # the others on different ports -- but it is NOT concurrent GPU+NPU of the same
-# model: the model runs on the NPU. See docs/linux-getting-started.md.
+# model: the model runs on the NPU. See the AMD XDNA driver + AMD XRT stack docs.
 #
 # Flow (mirrors FastFlowLM/Dockerfile + the install flow; OpenFlowLM-Next is an
 # open fork of FastFlowLM and factors the same steps differently):
@@ -21,8 +21,8 @@ FLM_DIR="FastFlowLM"
 IMAGE_BUILDER="fastflowlm:builder"
 IMAGE_RUNTIME="fastflowlm:runtime"
 
-PORT="${PORT:-9931}"    # same as hipfire / llama.cpp -- run FLM alone on it
-NPU_CACHE="./npu-cache" # NPU runtime cache
+PORT="${PORT:-${DEFAULT_PORT}}" # same as hipfire / llama.cpp -- run FLM alone on it
+NPU_CACHE="./npu-cache"         # NPU runtime cache
 
 # Models are FLM's own Q4NX format, pulled through the flm CLI into $FLM_MODEL_PATH
 # (/root/.config/flm inside the runtime image; the catalog resolves the model
@@ -151,7 +151,7 @@ if [ ! -d "$FLM_DIR" ]; then
   git clone --recurse-submodules https://github.com/ROCm/FastFlowLM.git "$FLM_DIR"
 fi
 if [ -d "$FLM_DIR/.git" ]; then
-  (cd "$FLM_DIR" && git submodule update --init --recursive >/dev/null 2>&1 || true)
+  (cd "$FLM_DIR" && git submodule update --init --recursive >/dev/null 2>&1)
 fi
 
 # 1. Build the "builder" image (installs the XRT/Boost build stack and builds the
@@ -204,8 +204,8 @@ docker run --rm --name flm_pull \
 # 4. Serve the OpenAI-compatible API on $PORT with the NPU passed through.
 #    --ctx-len defaults to the model's max context; override with FLM_CTX_LEN.
 CTX_LEN="${FLM_CTX_LEN:-${MODEL_CTX[$MODEL_TAG]:-32768}}"
-echo "USING CTX_LEN: $CTX_LEN"
-docker rm -f flm_server >/dev/null 2>&1 || true
+stop_server flm_server
+require_free_port "$PORT"
 docker run --rm --name flm_server --init \
   --cap-add=IPC_LOCK \
   --ulimit memlock=-1:-1 \
@@ -218,3 +218,4 @@ docker run --rm --name flm_server --init \
   -p "$PORT:$PORT" \
   "$IMAGE_RUNTIME" \
   serve "$MODEL_TAG" --host 0.0.0.0 --port "$PORT" --ctx-len "$CTX_LEN"
+echo "OpenAI-compatible API: http://127.0.0.1:${PORT}/v1"

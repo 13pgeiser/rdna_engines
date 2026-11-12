@@ -18,6 +18,10 @@
 # Priority for the chosen model: override tag > numeric first arg > interactive
 # prompt (when attached to a terminal) > default index.
 
+# Shared helpers also provided here (see their doc comments below): die,
+# DEFAULT_PORT, stop_server, require_free_port, and the deploy_llama flow used by
+# the llama.cpp launchers.
+
 # select_model <default_index> <arg1> <override_tag>
 # Resolves the model and sets global MODEL_TAG to the value (after the |) of the
 # CHOICES entry it selects. An empty override means "no explicit tag given".
@@ -31,8 +35,25 @@ select_model() {
   local override="${3:-}"
   local n="${#CHOICES[@]}"
 
-  # An explicit override tag (e.g. OFLM_MODEL=... on the command line) wins outright.
+  # An explicit override tag (e.g. OFLM_MODEL=... on the command line) wins outright,
+  # but must match one of the current CHOICES entries.
   if [ -n "$override" ]; then
+    local entry tag found=""
+    for entry in "${CHOICES[@]}"; do
+      tag="${entry#*|}"
+      if [ "$tag" = "$override" ]; then
+        found="$tag"
+        break
+      fi
+    done
+    if [ -z "$found" ]; then
+      local valid="" e
+      for e in "${CHOICES[@]}"; do
+        valid+="${e#*|}, "
+      done
+      valid="${valid%, }"
+      die "unknown model override '$override' (valid: $valid)."
+    fi
     MODEL_TAG="$override"
     echo "Selected model: $MODEL_TAG"
     return 0
@@ -57,8 +78,7 @@ select_model() {
   # An invalid value (non-numeric or out of range) stops instead of selecting a
   # default.
   if [[ ! "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt "$n" ]; then
-    echo "ERROR: invalid model selection '$choice' (expected 1-$n)." >&2
-    exit 1
+    die "invalid model selection '$choice' (expected 1-$n)."
   fi
 
   MODEL_TAG="${CHOICES[$((choice - 1))]#*|}"
@@ -78,15 +98,46 @@ run_interactive() {
   fi
 }
 
+# die <message>...
+# Print each argument as an ERROR line to stderr and exit 1. Shared error exit
+# for preflights and validation, so launchers do not repeat the wording.
+die() {
+  local msg
+  for msg in "$@"; do
+    echo "ERROR: $msg" >&2
+  done
+  exit 1
+}
+
+# DEFAULT_PORT -- shared by every engine; override with the PORT env var.
+DEFAULT_PORT="${DEFAULT_PORT:-9931}"
+
+# stop_server <name>
+# Remove a stale server container before a new one is started (idempotent).
+stop_server() {
+  docker rm -f "$1" >/dev/null 2>&1 || true
+}
+
+# require_free_port <port>
+# Fail early (instead of deep inside docker at bind time) if the API port is taken.
+require_free_port() {
+  local port="$1"
+  if ! [[ "$port" =~ ^[0-9]+$ ]]; then
+    die "invalid port '$port'."
+  fi
+  if (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null; then
+    die "port $port is already in use -- set PORT=... to run on another port."
+  fi
+}
+
 # require_accel_device
 # FastFlowLM / OpenFlowLM compute on the AMD XDNA NPU (/dev/accel), not the GPU.
 # Without the device the run fails inside the runtime anyway, so bail out early.
 require_accel_device() {
   if [ ! -e /dev/accel/accel0 ]; then
-    echo "ERROR: no NPU device /dev/accel/accel0." >&2
-    echo "FastFlowLM and OpenFlowLM run on the AMD Ryzen AI XDNA2 NPU. See docs/linux-getting-started.md for" >&2
-    echo "the amdxdna driver + AMD XRT stack (libxrt-npu2) required before this can run." >&2
-    exit 1
+    die "no NPU device /dev/accel/accel0." \
+      "FastFlowLM and OpenFlowLM run on the AMD Ryzen AI XDNA2 NPU. Requires the amdxdna driver" \
+      "+ AMD XRT stack (libxrt-npu2) before this can run."
   fi
 }
 
@@ -101,8 +152,7 @@ require_gpu() {
   local path="/sys/class/drm/card0/device/device"
   local id arch
   if [ ! -r "$path" ]; then
-    echo "ERROR: cannot read $path -- no accessible AMD GPU?" >&2
-    exit 1
+    die "cannot read $path -- no accessible AMD GPU?"
   fi
   id="$(cat "$path")"
   case "$id" in
@@ -118,8 +168,7 @@ require_gpu() {
       return 0
     fi
   done
-  echo "ERROR: GPU '$arch' is not supported by this engine (need: $*)." >&2
-  exit 1
+  die "GPU '$arch' is not supported by this engine (need: $*)."
 }
 
 # --- llama.cpp shared helpers ------------------------------------------------
@@ -191,8 +240,7 @@ download_model() {
   if [ ! -f "$path" ]; then
     mkdir -p "$(dirname "$path")"
     if [ -z "${MODEL_URLS[$name]:-}" ]; then
-      echo "ERROR: no download URL for '$name' in MODEL_URLS." >&2
-      exit 1
+      die "no download URL for '$name' in MODEL_URLS."
     fi
     echo "Downloading $name ..."
     wget -O "$path" "${MODEL_URLS[$name]}"
@@ -205,15 +253,38 @@ download_model() {
 # --parallel: single user, 1 slot; llama.cpp's default (auto) is 4 slots with a
 # unified KV pool, splitting the card across sequences that never exist here.
 run_llama_server() {
-  docker rm -f "$SERVER_NAME" 2>/dev/null || true
+  stop_server "$SERVER_NAME"
+  require_free_port "${PORT:-${DEFAULT_PORT}}"
+  local port="${PORT:-${DEFAULT_PORT}}"
   docker run --rm --name "$SERVER_NAME" \
     "${EXTRA_RUN_ARGS[@]}" \
     -v /models:/models \
-    -p "$PORT:$PORT" \
+    -p "${port}:${port}" \
     "$IMAGE_NAME" \
     --model "$MODEL_PATH" \
     --host 0.0.0.0 \
-    --port "$PORT" \
+    --port "$port" \
     --parallel "${LLAMA_PARALLEL:-1}" \
-    --reasoning-effort medium
+    --reasoning-effort "${LLAMA_REASONING_EFFORT:-medium}" \
+    -fa "${LLAMA_FA:-on}" -ctk "${LLAMA_CTK:-q8_0}" -ctv "${LLAMA_CTV:-q8_0}" \
+    --batch-size "${LLAMA_BATCH_SIZE:-2048}" --ubatch-size "${LLAMA_UBATCH_SIZE:-512}"
+  echo "OpenAI-compatible API: http://127.0.0.1:${port}/v1"
+}
+
+# deploy_llama
+# Shared clone -> build -> download -> serve flow for the two llama.cpp launchers
+# (see the per-backend section of the launcher scripts). The caller resolves the
+# model first and has set the backend-specific globals these helpers read:
+#   LLAMA_CPP_DIR, DOCKERFILE, IMAGE_NAME -> build_llama_server
+#   MODEL_DIR                             -> download_model <name>
+#   SERVER_NAME, EXTRA_RUN_ARGS, PORT, MODEL_PATH -> run_llama_server
+deploy_llama() {
+  # 1. Clone llama.cpp if not present
+  clone_llama_cpp "$LLAMA_CPP_DIR"
+  # 2. Build the backend server image from the local llama.cpp clone
+  build_llama_server
+  # 3. Download the model if it is not present yet (fetch on demand via MODEL_URLS)
+  download_model "$MODEL_NAME"
+  # 4. Run the backend server (PORT default 9931, shared with hipfire/OFLM -- run alone on it)
+  run_llama_server
 }

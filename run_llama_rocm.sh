@@ -23,15 +23,4 @@ select_llama_model ROCm "${1:-}"
 MODEL_NAME="$MODEL_TAG"
 MODEL_PATH="$MODEL_DIR/$MODEL_NAME"
 
-# 1. Clone llama.cpp if not present
-clone_llama_cpp "$LLAMA_CPP_DIR"
-
-# 2. Build the ROCm server image from the local clone
-build_llama_server
-
-# 3. Download the model if it is not present yet (fetch on demand via MODEL_URLS)
-download_model "$MODEL_NAME"
-
-# 4. Run the ROCm server (PORT default 9931, shared with hipfire/OFLM -- run alone on it)
-PORT="${PORT:-9931}"
-run_llama_server
+deploy_llama

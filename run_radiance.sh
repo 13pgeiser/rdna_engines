@@ -71,11 +71,12 @@ MODEL_DIR="$MODELS_DIR"
 download_model "$MODEL_NAME"
 
 # 4. Run the server (GPU passthrough + OpenAI-compatible API on $PORT)
-PORT="${PORT:-9931}"
-docker rm -f radiance_server 2>/dev/null || true
+PORT="${PORT:-${DEFAULT_PORT}}"
+stop_server radiance_server
+require_free_port "$PORT"
 docker run --rm --name radiance_server \
   --init \
-  --ulimit memlock=-1 \
+  --ulimit memlock=-1:-1 \
   --device /dev/kfd \
   --device /dev/dri \
   --group-add "$(getent group render | cut -d: -f3)" \
@@ -87,6 +88,7 @@ docker run --rm --name radiance_server \
   --model "/models/$MODEL_NAME" \
   --host 0.0.0.0 \
   --port "$PORT" \
-  --max-model-len 262144 \
+  --max-model-len "${RADIANCE_MAX_MODEL_LEN:-262144}" \
   --max-num-seqs "$MAX_NUM_SEQS" \
-  --kv-cache-dtype fp8
+  --kv-cache-dtype "${RADIANCE_KV_CACHE_DTYPE:-fp8}"
+echo "OpenAI-compatible API: http://127.0.0.1:${PORT}/v1"

@@ -6,7 +6,7 @@ set -euo pipefail
 # Unlike hipfire (HIP/GPU) and llama.cpp (Vulkan/GPU), OFLM computes on the NPU
 # (/dev/accel), not the GPU. This is a separate process, so it can run alongside
 # the others on different ports -- but it is NOT concurrent GPU+NPU of the same
-# model: the model runs on the NPU. See docs/linux-getting-started.md.
+# model: the model runs on the NPU. See the AMD XDNA driver + AMD XRT stack docs.
 #
 # Flow (mirrors OpenFlowLM-Next/build_in_docker.sh + Dockerfile + compose.yaml):
 #   1. Build the "builder" image (installs XRT/Boost, builds the mlir-aie
@@ -25,7 +25,7 @@ IMAGE_RUNTIME="openflowlm:runtime"
 
 OFLM_HF_OWNER="${OFLM_HF_OWNER:-Atomic-Germ}" # both Atomic-Germ/ and FastFlowLM/ host the model
 
-PORT="${PORT:-9931}"                  # same as hipfire / llama.cpp -- run OFLM alone on it
+PORT="${PORT:-${DEFAULT_PORT}}"       # same as hipfire / llama.cpp -- run OFLM alone on it
 DEB_BUILT="$OFLM_DIR/.oflm-deb-built" # outside build/ so clean-build keeps it
 
 # Models are OFLM's own Q4NX format (not GGUF), so they live in /models/openflowlm
@@ -82,7 +82,7 @@ if [ ! -d "$OFLM_DIR" ]; then
   git clone https://github.com/Atomic-Germ/OpenFlowLM-Next.git "$OFLM_DIR"
 fi
 if [ -d "$OFLM_DIR/.git" ]; then
-  (cd "$OFLM_DIR" && git submodule update --init --recursive >/dev/null 2>&1 || true)
+  (cd "$OFLM_DIR" && git submodule update --init --recursive >/dev/null 2>&1)
 fi
 
 # 1. Build the builder image, export the kernels, and package the .deb.
@@ -135,7 +135,8 @@ fi
 # 4. Serve the OpenAI-compatible API on $PORT with the NPU passed through.
 #    --ctx-len defaults to the model's max context; override with OFLM_CTX_LEN.
 CTX_LEN="${OFLM_CTX_LEN:-${MODEL_CTX[$MODEL_TAG]:-32768}}"
-docker rm -f oflm_server 2>/dev/null || true
+stop_server oflm_server
+require_free_port "$PORT"
 docker run --rm --name oflm_server --init \
   --cap-add=IPC_LOCK \
   --ulimit memlock=-1:-1 \
@@ -147,3 +148,4 @@ docker run --rm --name oflm_server --init \
   -p "$PORT:$PORT" \
   "$IMAGE_RUNTIME" \
   serve "$MODEL_TAG" --host 0.0.0.0 --port "$PORT" --ctx-len "$CTX_LEN"
+echo "OpenAI-compatible API: http://127.0.0.1:${PORT}/v1"

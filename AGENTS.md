@@ -28,6 +28,20 @@ Each clones its engine, builds its Docker image, pulls the model
 - NPU engines (fastflowlm/openflowlm) run on gfx1152 only; GPU engines on
   both. NPU engines also require `/dev/accel/accel0`.
 
+## Tuning knobs (env overrides)
+- llama.cpp server (`common.sh` `run_llama_server`): `LLAMA_PARALLEL`, `LLAMA_REASONING_EFFORT`, `LLAMA_FA`, `LLAMA_CTK`, `LLAMA_CTV`, `LLAMA_BATCH_SIZE`, `LLAMA_UBATCH_SIZE`.
+- hipfire: `HIPFIRE_MAX_SEQ`, `HIPFIRE_IDLE_TIMEOUT`.
+- radiance: `RADIANCE_MAX_MODEL_LEN`, `RADIANCE_KV_CACHE_DTYPE`, `MAX_NUM_SEQS`.
+- NPU context length: `OFLM_CTX_LEN` / `FLM_CTX_LEN`.
+
+## Shared helpers (`common.sh`)
+- `die` — shared error exit (preflights / validation).
+- `DEFAULT_PORT` (9931) — single source of truth for the API port.
+- `stop_server <name>` — idempotent stale-container removal before a fresh run.
+- `require_free_port <port>` — fail early if the API port is taken.
+- `deploy_llama` — shared clone -> build -> download -> serve flow for the two
+  llama.cpp launchers (they only set backend-specific globals beforehand).
+
 ## Gotchas
 - **Default port 9931 is shared by all launchers** — run one at a time, or set
   `PORT`. NPU engines are a separate process and can run alongside a GPU
