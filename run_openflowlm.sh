@@ -25,6 +25,10 @@ IMAGE_RUNTIME="openflowlm:runtime"
 
 OFLM_HF_OWNER="${OFLM_HF_OWNER:-Atomic-Germ}" # both Atomic-Germ/ and FastFlowLM/ host the model
 
+# Shared helpers (DEFAULT_PORT, select_model, preflights) -- sourced before the
+# PORT default is read so `set -u` does not trip on the unset DEFAULT_PORT.
+. "$(dirname "$0")/common.sh"
+
 PORT="${PORT:-${DEFAULT_PORT}}"       # same as hipfire / llama.cpp -- run OFLM alone on it
 DEB_BUILT="$OFLM_DIR/.oflm-deb-built" # outside build/ so clean-build keeps it
 
@@ -42,17 +46,11 @@ NPU_CACHE="./npu-cache" # NPU runtime cache
 CHOICES=(
   "qwen3.6-35b-a3b|qwen3.6-moe:35b-a3b"
   "ornith1.5-35b-a3b|ornith-1.5:35b-a3b"
-  "phi4-mini-it:4b|phi4-mini-it:4b"
-  "nanbeige4.1:3b|nanbeige4.1:3b"
-  "gemma4-it:e4b|gemma4-it:e4b"
   "gemma4-it:12b|gemma4-it:12b"
   "gpt-oss:20b|gpt-oss:20b"
 )
 MENU_TITLE="OpenFlowLM model selection (runs on the AMD Ryzen AI XDNA2 NPU):"
 MODEL_DEFAULT_INDEX=1 # qwen3.6-35b-a3b
-# Shared interactive menu mechanism (see common.sh); resolves MODEL_TAG from CHOICES.
-. "$(dirname "$0")/common.sh"
-
 # Preflight: only supported GPUs (OpenFlowLM runs on gfx1152 only).
 require_gpu gfx1152
 
@@ -61,13 +59,10 @@ mkdir -p "$DATA_DIR"
 
 # Context length per model tag: the model's max context (RoPE max, per the
 # FastFlowLM docs), not the engine's low default_context_length. qwen3.6 /
-# ornith / nanbeige run at 262144; gemma4, phi4-mini and gpt-oss cap at 131072.
+# ornith run at 262144; gemma4 and gpt-oss cap at 131072.
 declare -A MODEL_CTX=(
   ["qwen3.6-moe:35b-a3b"]=262144
   ["ornith-1.5:35b-a3b"]=262144
-  ["phi4-mini-it:4b"]=131072
-  ["nanbeige4.1:3b"]=262144
-  ["gemma4-it:e4b"]=131072
   ["gemma4-it:12b"]=131072
   ["gpt-oss:20b"]=131072
 )

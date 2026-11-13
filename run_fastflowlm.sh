@@ -21,6 +21,10 @@ FLM_DIR="FastFlowLM"
 IMAGE_BUILDER="fastflowlm:builder"
 IMAGE_RUNTIME="fastflowlm:runtime"
 
+# Shared helpers (DEFAULT_PORT, select_model, preflights) -- sourced before the
+# PORT default is read so `set -u` does not trip on the unset DEFAULT_PORT.
+. "$(dirname "$0")/common.sh"
+
 PORT="${PORT:-${DEFAULT_PORT}}" # same as hipfire / llama.cpp -- run FLM alone on it
 NPU_CACHE="./npu-cache"         # NPU runtime cache
 
@@ -36,57 +40,14 @@ DATA_DIR="/models/fastflowlm"
 CHOICES=(
   # flagship / reasoning
   "qwen3.6-35b-a3b|qwen3.6-moe:35b-a3b"
-  "qwen3.8-27b|qwen3.8-mtp:27b"
-  "qwen3.8-dflash2-27b|qwen3.8-dflash2:27b"
   "gpt-oss-20b|gpt-oss:20b"
-  "deepseek-r1-8b|deepseek-r1:8b"
-  "deepseek-r1-0528-8b|deepseek-r1-0528:8b"
-  "lfm3-1.7b|lfm3:1.7b"
-  "lfm2-trans-2.6b|lfm2-trans:2.6b"
   # gemma
   "gemma4-it-12b|gemma4-it:12b"
-  "gemma4-it-8b|gemma4-it:e4b"
-  "gemma4-it-5b|gemma4-it:e2b"
-  "gemma4e-flash-8b|gemma4e-flash:e4b"
-  "gemma3-4b|gemma3:4b"
-  "gemma3-1b|gemma3:1b"
-  "medgemma-4b|medgemma:4b"
-  # qwen
-  "qwen3.5-9b|qwen3.5:9b"
-  "qwen3.5-4b|qwen3.5:4b"
-  "qwen3.5-2b|qwen3.5:2b"
-  "qwen3.5-0.8b|qwen3.5:0.8b"
-  "qwen3-8b|qwen3:8b"
-  "qwen3-4b|qwen3:4b"
-  "qwen3-1.7b|qwen3:1.7b"
-  "qwen3-0.6b|qwen3:0.6b"
-  "qwen3-thinking-4b|qwen3-tk:4b"
-  "qwen3-instruct-4b|qwen3-it:4b"
-  "qwen2.5-3b|qwen2.5-it:3b"
-  # llama / phi / hunyuan / lfm2
-  "llama-3.2-3b|llama3.2:3b"
-  "llama-3.2-1b|llama3.2:1b"
-  "llama-3.1-8b|llama3.1:8b"
-  "phi4-mini-4b|phi4-mini-it:4b"
-  "hy-mt2-1.8b|hy-mt2-flash:1.8b"
-  "hy-memory-30b-a3b|hy-memory:30b-a3b"
-  "nanbeige4.1-3b|nanbeige4.1:3b"
-  "lfm2-2.6b|lfm2:2.6b"
-  "lfm2-1.2b|lfm2:1.2b"
-  "lfm2.5-it-1.2b|lfm2.5-it:1.2b"
-  # vision
-  "qwen3vl-4b|qwen3vl-it:4b"
-  "qwen3vl-flash-4b|qwen3vl-flash:4b"
-  "minicpm-v-4.7-1b|minicpm-v-4.7:1b"
-  # asr / embed
-  "whisper-v3-turbo|whisper-v3:turbo"
-  "embed-gemma-300m|embed-gemma:300m"
+  # nemotron (reasoning / speculative)
+  "nemotron3.5-bolt-dflash-e4b|nemotron3.5-bolt-dflash:e4b"
 )
 MENU_TITLE="FastFlowLM model selection (runs on the AMD Ryzen AI XDNA2 NPU):"
 MODEL_DEFAULT_INDEX=1 # qwen3.6-moe:35b-a3b
-# Shared interactive menu mechanism (see common.sh); resolves MODEL_TAG from CHOICES.
-. "$(dirname "$0")/common.sh"
-
 # Preflight: only supported GPUs (FastFlowLM runs on gfx1152 only).
 require_gpu gfx1152
 
@@ -94,51 +55,12 @@ select_model "$MODEL_DEFAULT_INDEX" "${1:-}" "${FLM_MODEL:-}"
 mkdir -p "$DATA_DIR"
 
 # Context length per model tag: the model's max context (RoPE max, per the
-# FastFlowLM docs), not the engine's low default_context_length (1k-32k). The
-# "Flash" variants and hy-mt2-flash have a fixed 1k limit (overrides ignored),
-# hy-memory is fixed at 16k; whisper/embed have no chat context, so they keep
-# the engine default.
+# FastFlowLM docs), not the engine's low default_context_length (1k-32k).
 declare -A MODEL_CTX=(
   ["qwen3.6-moe:35b-a3b"]=262144
-  ["qwen3.8-mtp:27b"]=262144
-  ["qwen3.8-dflash2:27b"]=8192 # [ERROR]  Failed to load model: attn_layout: max_len
   ["gpt-oss:20b"]=131072
-  ["deepseek-r1:8b"]=131072
-  ["deepseek-r1-0528:8b"]=65536
-  ["lfm3:1.7b"]=32768
   ["gemma4-it:12b"]=131072
-  ["gemma4-it:e4b"]=131072
-  ["gemma4-it:e2b"]=131072
-  ["gemma4e-flash:e4b"]=1024
-  ["gemma3:4b"]=131072
-  ["gemma3:1b"]=32768
-  ["medgemma:4b"]=131072
-  ["qwen3.5:9b"]=262144
-  ["qwen3.5:4b"]=262144
-  ["qwen3.5:2b"]=262144
-  ["qwen3.5:0.8b"]=262144
-  ["qwen3:8b"]=32768
-  ["qwen3:4b"]=32768
-  ["qwen3:1.7b"]=32768
-  ["qwen3:0.6b"]=32768
-  ["qwen3-tk:4b"]=262144
-  ["qwen3-it:4b"]=262144
-  ["qwen2.5-it:3b"]=32768
-  ["llama3.2:3b"]=131072
-  ["llama3.2:1b"]=131072
-  ["llama3.1:8b"]=131072
-  ["phi4-mini-it:4b"]=131072
-  ["hy-mt2-flash:1.8b"]=1024
-  ["hy-memory:30b-a3b"]=16384
-  ["nanbeige4.1:3b"]=262144
-  ["lfm2:2.6b"]=32768
-  ["lfm2:1.2b"]=32768
-  ["lfm2.5-it:1.2b"]=32768
-  ["qwen3vl-it:4b"]=262144
-  ["qwen3vl-flash:4b"]=1024
-  ["minicpm-v-4.7:1b"]=32768
-  ["whisper-v3:turbo"]=448
-  ["embed-gemma:300m"]=2048
+  ["nemotron3.5-bolt-dflash:e4b"]=32768
 )
 
 # Preflight: FLM needs the AMD XDNA NPU. Without it the run fails inside anyway.

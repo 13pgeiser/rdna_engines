@@ -189,10 +189,15 @@ select_llama_model() {
   local backend="$1"
   CHOICES=(
     "qwen3.8-27b|Qwen3.8-27B-UD-Q4_K_M.gguf"
+    "qwen2.5-7b-vl|Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf"
     "ornith1.5-35b-a3b|Ornith-1.5-35B-Q4_K_M.gguf"
     "ornith1.5-9b|Ornith-1.5-9B-Q4_K_M.gguf"
     "gemma4-12b-it|gemma-4-12b-it-Q4_K_M.gguf"
     "gemma4-26b-a4b|gemma-4-26B-A4B-it-UD-Q4_K_M.gguf"
+    "gemma4-31b-it|gemma-4-31B-it-Q4_K_M.gguf"
+    "gemma4-e4b-it|gemma-4-E4B-it-Q4_K_M.gguf"
+    "gemma4-e2b-it|gemma-4-E2B-it-Q4_K_M.gguf"
+    "gemma4-12b-it-qat|gemma-4-12B-it-qat-UD-Q4_K_XL.gguf"
     "gpt-oss-20b|gpt-oss-20b-Q4_K_M.gguf"
     "qwen3-coder-30b|Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf"
     "qwen3.6-35b-a3b-ud|Qwen3.6-35B-A3B-UD-Q4_K_M.gguf"
@@ -203,15 +208,48 @@ select_llama_model() {
   # Global (not local): download_model runs after this function returns.
   declare -gA MODEL_URLS=(
     ["Ornith-1.5-35B-Q4_K_M.gguf"]="https://huggingface.co/ornith-ai/Ornith-1.5-35B-A3B-GGUF/resolve/main/Ornith-1.5-35B-Q4_K_M.gguf?download=true"
+    ["Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf"]="https://huggingface.co/unsloth/Qwen2.5-VL-7B-Instruct-GGUF/resolve/main/Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf?download=true"
     ["Qwen3.8-27B-UD-Q4_K_M.gguf"]="https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/main/Qwen3.8-27B-UD-Q4_K_M.gguf?download=true"
     ["Ornith-1.5-9B-Q4_K_M.gguf"]="https://huggingface.co/ornith-ai/Ornith-1.5-9B-GGUF/resolve/main/Ornith-1.5-9B-Q4_K_M.gguf?download=true"
     ["gemma-4-12b-it-Q4_K_M.gguf"]="https://huggingface.co/unsloth/gemma-4-12b-it-GGUF/resolve/main/gemma-4-12b-it-Q4_K_M.gguf?download=true"
     ["gemma-4-26B-A4B-it-UD-Q4_K_M.gguf"]="https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF/resolve/main/gemma-4-26B-A4B-it-UD-Q4_K_M.gguf?download=true"
+    ["gemma-4-31B-it-Q4_K_M.gguf"]="https://huggingface.co/unsloth/gemma-4-31B-it-GGUF/resolve/main/gemma-4-31B-it-Q4_K_M.gguf?download=true"
+    ["gemma-4-12B-it-qat-UD-Q4_K_XL.gguf"]="https://huggingface.co/unsloth/gemma-4-12B-it-qat-GGUF/resolve/main/gemma-4-12B-it-qat-UD-Q4_K_XL.gguf?download=true"
+    ["gemma-4-E4B-it-Q4_K_M.gguf"]="https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-Q4_K_M.gguf?download=true"
+    ["gemma-4-E2B-it-Q4_K_M.gguf"]="https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main/gemma-4-E2B-it-Q4_K_M.gguf?download=true"
     ["gpt-oss-20b-Q4_K_M.gguf"]="https://huggingface.co/unsloth/gpt-oss-20b-GGUF/resolve/main/gpt-oss-20b-Q4_K_M.gguf?download=true"
     ["Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf"]="https://huggingface.co/unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF/resolve/main/Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf?download=true"
     ["Qwen3.6-35B-A3B-UD-Q4_K_M.gguf"]="https://huggingface.co/unsloth/Qwen3.6-35B-A3B-GGUF/resolve/main/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf?download=true"
     ["flint-UD-Q4_K_XL.gguf"]="https://huggingface.co/unsloth/flint-GGUF/resolve/main/flint-UD-Q4_K_XL.gguf?download=true"
     ["flint-Q8_0.gguf"]="https://huggingface.co/unsloth/flint-GGUF/resolve/main/flint-Q8_0.gguf?download=true"
+  )
+  # Multimodal (vision) models: text-only GGUF plus a separate image-text
+  # projection file, kept under the model's own subdirectory. Keyed by GGUF
+  # filename -> mmproj path relative to $MODEL_DIR (empty for text-only models).
+  declare -gA MODEL_MMPROJ=(
+    ["Qwen3.8-27B-UD-Q4_K_M.gguf"]="Qwen3.8-27B-UD-Q4_K_M/mmproj-BF16.gguf"
+    ["Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf"]="Qwen2.5-VL-7B-Instruct-Q4_K_M/mmproj-BF16.gguf"
+    ["Ornith-1.5-35B-Q4_K_M.gguf"]="Ornith-1.5-35B-Q4_K_M/mmproj-Ornith-1.5-35B-BF16.gguf"
+    ["Ornith-1.5-9B-Q4_K_M.gguf"]="Ornith-1.5-9B-Q4_K_M/mmproj-Ornith-1.5-9B-BF16.gguf"
+    ["gemma-4-12b-it-Q4_K_M.gguf"]="gemma-4-12b-it-Q4_K_M/mmproj-BF16.gguf"
+    ["gemma-4-26B-A4B-it-UD-Q4_K_M.gguf"]="gemma-4-26B-A4B-it-UD-Q4_K_M/mmproj-BF16.gguf"
+    ["gemma-4-31B-it-Q4_K_M.gguf"]="gemma-4-31B-it-Q4_K_M/mmproj-BF16.gguf"
+    ["gemma-4-12B-it-qat-UD-Q4_K_XL.gguf"]="gemma-4-12B-it-qat-UD-Q4_K_XL/mmproj-BF16.gguf"
+    ["gemma-4-E4B-it-Q4_K_M.gguf"]="gemma-4-E4B-it-Q4_K_M/mmproj-BF16.gguf"
+    ["gemma-4-E2B-it-Q4_K_M.gguf"]="gemma-4-E2B-it-Q4_K_M/mmproj-BF16.gguf"
+  )
+  # Download URLs for the mmproj projection files, keyed like MODEL_URLS.
+  declare -gA MODEL_MMPROJ_URLS=(
+    ["Qwen3.8-27B-UD-Q4_K_M.gguf"]="https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/main/mmproj-BF16.gguf?download=true"
+    ["Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf"]="https://huggingface.co/unsloth/Qwen2.5-VL-7B-Instruct-GGUF/resolve/main/mmproj-BF16.gguf?download=true"
+    ["Ornith-1.5-35B-Q4_K_M.gguf"]="https://huggingface.co/ornith-ai/Ornith-1.5-35B-A3B-GGUF/resolve/main/mmproj-Ornith-1.5-35B-BF16.gguf?download=true"
+    ["Ornith-1.5-9B-Q4_K_M.gguf"]="https://huggingface.co/ornith-ai/Ornith-1.5-9B-GGUF/resolve/main/mmproj-Ornith-1.5-9B-BF16.gguf?download=true"
+    ["gemma-4-12b-it-Q4_K_M.gguf"]="https://huggingface.co/unsloth/gemma-4-12b-it-GGUF/resolve/main/mmproj-BF16.gguf?download=true"
+    ["gemma-4-26B-A4B-it-UD-Q4_K_M.gguf"]="https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF/resolve/main/mmproj-BF16.gguf?download=true"
+    ["gemma-4-31B-it-Q4_K_M.gguf"]="https://huggingface.co/unsloth/gemma-4-31B-it-GGUF/resolve/main/mmproj-BF16.gguf?download=true"
+    ["gemma-4-12B-it-qat-UD-Q4_K_XL.gguf"]="https://huggingface.co/unsloth/gemma-4-12B-it-qat-GGUF/resolve/main/mmproj-BF16.gguf?download=true"
+    ["gemma-4-E4B-it-Q4_K_M.gguf"]="https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/mmproj-BF16.gguf?download=true"
+    ["gemma-4-E2B-it-Q4_K_M.gguf"]="https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main/mmproj-BF16.gguf?download=true"
   )
   select_model 1 "${2:-}" "${LLAMA_MODEL:-}" # 1 = qwen3.8-27b
 }
@@ -245,6 +283,16 @@ download_model() {
     echo "Downloading $name ..."
     wget -O "$path" "${MODEL_URLS[$name]}"
   fi
+  # Vision (multimodal) models also need the image-text projection file.
+  local mmproj="${MODEL_MMPROJ[$name]:-}"
+  if [ -n "$mmproj" ] && [ ! -f "$MODEL_DIR/$mmproj" ]; then
+    if [ -z "${MODEL_MMPROJ_URLS[$name]:-}" ]; then
+      die "no download URL for the mmproj of '$name' in MODEL_MMPROJ_URLS."
+    fi
+    echo "Downloading $mmproj ..."
+    mkdir -p "$(dirname "$MODEL_DIR/$mmproj")"
+    wget -O "$MODEL_DIR/$mmproj" "${MODEL_MMPROJ_URLS[$name]}"
+  fi
 }
 
 # run_llama_server
@@ -256,12 +304,18 @@ run_llama_server() {
   stop_server "$SERVER_NAME"
   require_free_port "${PORT:-${DEFAULT_PORT}}"
   local port="${PORT:-${DEFAULT_PORT}}"
+  local mmproj_args=()
+  local mmproj="${MODEL_MMPROJ[$MODEL_NAME]:-}"
+  if [ -n "$mmproj" ]; then
+    mmproj_args=(--mmproj "$MODEL_DIR/$mmproj")
+  fi
   docker run --rm --name "$SERVER_NAME" \
     "${EXTRA_RUN_ARGS[@]}" \
     -v /models:/models \
     -p "${port}:${port}" \
     "$IMAGE_NAME" \
     --model "$MODEL_PATH" \
+    "${mmproj_args[@]}" \
     --host 0.0.0.0 \
     --port "$port" \
     --parallel "${LLAMA_PARALLEL:-1}" \
