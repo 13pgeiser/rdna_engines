@@ -40,6 +40,7 @@ DATA_DIR="/models/fastflowlm"
 CHOICES=(
   # flagship / reasoning
   "qwen3.6-35b-a3b|qwen3.6-moe:35b-a3b"
+  "qwen3.5-9b|qwen3.5:9b"
   "gpt-oss-20b|gpt-oss:20b"
   # gemma
   "gemma4-it-12b|gemma4-it:12b"
@@ -58,6 +59,7 @@ mkdir -p "$DATA_DIR"
 # FastFlowLM docs), not the engine's low default_context_length (1k-32k).
 declare -A MODEL_CTX=(
   ["qwen3.6-moe:35b-a3b"]=262144
+  ["qwen3.5:9b"]=32768
   ["gpt-oss:20b"]=131072
   ["gemma4-it:12b"]=131072
   ["nemotron3.5-bolt-dflash:e4b"]=32768
@@ -128,15 +130,54 @@ docker run --rm --name flm_pull \
 CTX_LEN="${FLM_CTX_LEN:-${MODEL_CTX[$MODEL_TAG]:-32768}}"
 stop_server flm_server
 require_free_port "$PORT"
+
+# Expose only the served tag to /v1/models so Open WebUI shows just that one
+# (FastFlowLM otherwise lists its whole catalog). FLM reads the catalog from
+# FLM_CONFIG_PATH (see common/utils.cpp find_model_list). FLM_MODEL_LIST points
+# FLM at a model_list.json of your own; unset -> derive one for $MODEL_TAG from
+# the catalog, keeping the served entry verbatim (so load/serve is unchanged)
+# plus any base_model it depends on. The temp catalog is mounted read-only.
+if [ -n "${FLM_MODEL_LIST:-}" ]; then
+  TRIMMED_MODEL_LIST="${FLM_MODEL_LIST}"
+  [ -f "$TRIMMED_MODEL_LIST" ] || die "FLM_MODEL_LIST '$TRIMMED_MODEL_LIST' not found."
+else
+  TRIMMED_MODEL_LIST="$(mktemp "$PWD/.flm-model-list.XXXXXX")"
+  python3 - "$TRIMMED_MODEL_LIST" "$MODEL_TAG" "$FLM_DIR/src/model_list.json" <<'PY'
+import json, sys
+out_path, tag, catalog_path = sys.argv[1], sys.argv[2], sys.argv[3]
+with open(catalog_path) as f:
+    catalog = json.load(f)
+models, seen, stack = {}, set(), [tag]
+while stack:
+    t = stack.pop()
+    family, _, size = t.partition(":")
+    subset = catalog.get("models", {}).get(family)
+    if not subset or size not in subset:
+        sys.exit(f"model '{t}' not found in {catalog_path}")
+    entry = subset[size]
+    models.setdefault(family, {})[size] = entry
+    base = entry.get("base_model")
+    if base and base not in seen:
+        stack.append(base)
+    seen.add(t)
+with open(out_path, "w") as f:
+    json.dump({"model_path": catalog["model_path"], "models": models}, f, indent=1)
+PY
+  trap 'rm -f "$TRIMMED_MODEL_LIST"' EXIT
+fi
+echo "Serving $MODEL_TAG; /v1/models exposes only it (Open WebUI shows one model)."
+
 docker run --rm --name flm_server --init \
   --cap-add=IPC_LOCK \
   --ulimit memlock=-1:-1 \
   --device /dev/accel/accel0 \
   --security-opt seccomp=unconfined \
   -e FLM_MODEL_PATH=/root/.config/flm \
+  -e FLM_CONFIG_PATH="/flm-config/model_list.json" \
   -e NPU_CACHE_HOME=/root/.npu/cache \
   -v "$DATA_DIR":/root/.config/flm \
   -v "$PWD/$NPU_CACHE":/root/.npu/cache \
+  -v "${TRIMMED_MODEL_LIST}:/flm-config/model_list.json:ro" \
   -p "$PORT:$PORT" \
   "$IMAGE_RUNTIME" \
   serve "$MODEL_TAG" --host 0.0.0.0 --port "$PORT" --ctx-len "$CTX_LEN"
