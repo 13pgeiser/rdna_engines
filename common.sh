@@ -188,9 +188,9 @@ require_gpu() {
 select_llama_model() {
   local backend="$1"
   CHOICES=(
+    "ornith1.5-35b-a3b|Ornith-1.5-35B-Q4_K_M.gguf"
     "qwen3.8-27b|Qwen3.8-27B-UD-Q4_K_M.gguf"
     "qwen2.5-7b-vl|Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf"
-    "ornith1.5-35b-a3b|Ornith-1.5-35B-Q4_K_M.gguf"
     "ornith1.5-9b|Ornith-1.5-9B-Q4_K_M.gguf"
     "gemma4-12b-it|gemma-4-12b-it-Q4_K_M.gguf"
     "gemma4-26b-a4b|gemma-4-26B-A4B-it-UD-Q4_K_M.gguf"
@@ -251,7 +251,7 @@ select_llama_model() {
     ["gemma-4-E4B-it-Q4_K_M.gguf"]="https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/mmproj-BF16.gguf?download=true"
     ["gemma-4-E2B-it-Q4_K_M.gguf"]="https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main/mmproj-BF16.gguf?download=true"
   )
-  select_model 1 "${2:-}" "${LLAMA_MODEL:-}" # 1 = qwen3.8-27b
+  select_model 1 "${2:-}" "${LLAMA_MODEL:-}" # 1 = ornith1.5-35b-a3b
 }
 
 # clone_llama_cpp <dir>
