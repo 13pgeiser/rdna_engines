@@ -141,7 +141,15 @@ if [ -n "${FLM_MODEL_LIST:-}" ]; then
   TRIMMED_MODEL_LIST="${FLM_MODEL_LIST}"
   [ -f "$TRIMMED_MODEL_LIST" ] || die "FLM_MODEL_LIST '$TRIMMED_MODEL_LIST' not found."
 else
-  TRIMMED_MODEL_LIST="$(mktemp "$PWD/.flm-model-list.XXXXXX")"
+  # In DAEMON mode the container runs detached, so this file must outlive the
+  # launcher: use a stable path inside the gitignored FastFlowLM clone (and skip
+  # the EXIT cleanup). The foreground mode below keeps the original temp-file
+  # behavior.
+  if [ "${DAEMON:-0}" = "1" ]; then
+    TRIMMED_MODEL_LIST="$PWD/$FLM_DIR/.flm-model-list.${MODEL_TAG//:/-}.json"
+  else
+    TRIMMED_MODEL_LIST="$(mktemp "$PWD/.flm-model-list.XXXXXX")"
+  fi
   python3 - "$TRIMMED_MODEL_LIST" "$MODEL_TAG" "$FLM_DIR/src/model_list.json" <<'PY'
 import json, sys
 out_path, tag, catalog_path = sys.argv[1], sys.argv[2], sys.argv[3]
@@ -163,11 +171,24 @@ while stack:
 with open(out_path, "w") as f:
     json.dump({"model_path": catalog["model_path"], "models": models}, f, indent=1)
 PY
-  trap 'rm -f "$TRIMMED_MODEL_LIST"' EXIT
+  # Foreground runs clean up their temp model list; DAEMON runs keep it so the
+  # detached container (and a post-reboot restart) can keep mounting it.
+  if [ "${DAEMON:-0}" != "1" ]; then
+    trap 'rm -f "$TRIMMED_MODEL_LIST"' EXIT
+  fi
 fi
 echo "Serving $MODEL_TAG; /v1/models exposes only it (Open WebUI shows one model)."
 
-docker run --rm --name flm_server --init \
+# DAEMON=1 -> detached, managed by Docker's restart policy (survives host reboot);
+# default keeps the original foreground/self-removing behavior.
+if [ "${DAEMON:-0}" = "1" ]; then
+  RUN_MODE=(--restart unless-stopped -d)
+else
+  RUN_MODE=(--rm)
+fi
+docker run \
+  --name flm_server --init \
+  "${RUN_MODE[@]}" \
   --cap-add=IPC_LOCK \
   --ulimit memlock=-1:-1 \
   --device /dev/accel/accel0 \
@@ -182,3 +203,6 @@ docker run --rm --name flm_server --init \
   "$IMAGE_RUNTIME" \
   serve "$MODEL_TAG" --host 0.0.0.0 --port "$PORT" --ctx-len "$CTX_LEN"
 echo "OpenAI-compatible API: http://127.0.0.1:${PORT}/v1"
+if [ "${DAEMON:-0}" = "1" ]; then
+  echo "Detached as flm_server (restart=unless-stopped); follow logs with: docker logs -f flm_server"
+fi

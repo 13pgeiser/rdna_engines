@@ -54,7 +54,16 @@ docker build --progress=plain \
 docker volume create --name open-webui_data >/dev/null 2>&1 || true
 stop_server open-webui
 require_free_port "${OPENWEBUI_PORT}"
-docker run --rm --name open-webui \
+# DAEMON=1 -> detached, managed by Docker's restart policy (survives host reboot);
+# default keeps the original foreground/self-removing behavior.
+if [ "${DAEMON:-0}" = "1" ]; then
+  RUN_MODE=(--restart unless-stopped -d)
+else
+  RUN_MODE=(--rm)
+fi
+docker run \
+  --name open-webui \
+  "${RUN_MODE[@]}" \
   --init \
   --add-host host.docker.internal:host-gateway \
   -e OPENAI_API_BASE_URL="$OPENAI_API_BASE_URL" \
@@ -66,3 +75,6 @@ docker run --rm --name open-webui \
   "$IMAGE_NAME"
 echo "Open WebUI: http://127.0.0.1:${OPENWEBUI_PORT}/"
 echo "OpenAI-compatible API: http://127.0.0.1:${OPENWEBUI_PORT}/v1"
+if [ "${DAEMON:-0}" = "1" ]; then
+  echo "Detached as open-webui (restart=unless-stopped); follow logs with: docker logs -f open-webui"
+fi
